@@ -221,7 +221,7 @@ select_tunnel() {
 validate_hostname() {
     local hostname="$1"
     # RFC compliant hostname validation
-    if [[ ! "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+    if [[ ! "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
         return 1
     fi
     return 0
@@ -259,7 +259,7 @@ create_tunnel() {
         fi
         
         # Validate tunnel name format
-        if [[ ! "$tunnel_name" =~ ^[a-zA-Z0-9\-_]+$ ]]; then
+        if [[ ! "$tunnel_name" =~ ^[a-zA-Z0-9-_]+$ ]]; then
             log_error "Tunnel name can only contain letters, numbers, hyphens, and underscores"
             continue
         fi
