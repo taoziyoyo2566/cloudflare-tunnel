@@ -259,7 +259,7 @@ create_tunnel() {
         fi
         
         # Validate tunnel name format
-        if [[ ! "$tunnel_name" =~ ^[a-zA-Z0-9-_]+$ ]]; then
+        if [[ ! "$tunnel_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
             log_error "Tunnel name can only contain letters, numbers, hyphens, and underscores"
             continue
         fi
