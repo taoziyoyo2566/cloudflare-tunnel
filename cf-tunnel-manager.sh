@@ -1488,6 +1488,279 @@ handle_args() {
     esac
 }
 
+
+# add testing function 20250703
+# Test tunnel with temporary web server
+test_tunnel_connectivity() {
+    echo
+    log_info "=== Test Tunnel Connectivity ==="
+    
+    # Check if test files exist
+    local required_files=("test_server.py" "test_page.html" "add_test_rule.py")
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            log_error "Required file missing: $file"
+            echo "Please ensure all test files are in the same directory as the script:"
+            printf "• %s\n" "${required_files[@]}"
+            return 1
+        fi
+    done
+    
+    # Select tunnel to test
+    if ! select_tunnel "Select tunnel to test connectivity"; then
+        return 1
+    fi
+    
+    local tunnel_name="$selected_tunnel"
+    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
+    
+    if [[ ! -f "$config_file" ]]; then
+        log_error "Config file not found: $config_file"
+        return 1
+    fi
+    
+    # Show current ingress rules
+    echo
+    echo -e "${CYAN}Current ingress rules for $tunnel_name:${NC}"
+    echo "----------------------------------------"
+    grep -A 10 "ingress:" "$config_file" | grep -E "(hostname|service)" | head -5
+    echo "----------------------------------------"
+    
+    # Choose test method
+    echo
+    echo "Test options:"
+    echo "1) Create temporary test service on port 10101"
+    echo "2) Test existing service"
+    echo "3) Back to main menu"
+    
+    while true; do
+        read -p "Choose option (1-3): " test_choice
+        case $test_choice in
+            1)
+                create_temp_test_service
+                break
+                ;;
+            2)
+                test_existing_service
+                break
+                ;;
+            3)
+                return 0
+                ;;
+            *)
+                log_error "Please choose 1-3"
+                ;;
+        esac
+    done
+}
+
+# Create temporary test service
+create_temp_test_service() {
+    local test_port=10101
+    local test_hostname
+    
+    echo
+    read -p "Enter test hostname (e.g., test.example.com): " test_hostname
+    if [[ -z "$test_hostname" ]]; then
+        log_error "Hostname cannot be empty"
+        return 1
+    fi
+    
+    if ! validate_hostname "$test_hostname"; then
+        log_error "Invalid hostname format"
+        return 1
+    fi
+    
+    # Check if port is available
+    if netstat -ln 2>/dev/null | grep -q ":$test_port "; then
+        log_error "Port $test_port is already in use"
+        return 1
+    fi
+    
+    # Start test server
+    log_info "Starting test server on port $test_port..."
+    python3 test_server.py $test_port &
+    local server_pid=$!
+    
+    sleep 2
+    
+    # Check if server started successfully
+    if ! kill -0 $server_pid 2>/dev/null; then
+        log_error "Failed to start test server"
+        return 1
+    fi
+    
+    log_success "Test server started on port $test_port (PID: $server_pid)"
+    
+    # Backup original config
+    local backup_file="$BACKUP_DIR/config_${tunnel_name}_test_$(date +%s).yml"
+    cp "$config_file" "$backup_file"
+    
+    # Add temporary ingress rule using external Python script
+    log_info "Adding temporary ingress rule..."
+    if python3 add_test_rule.py "$config_file" "$test_hostname" "$test_port"; then
+        log_success "Test ingress rule added"
+    else
+        log_error "Failed to add test ingress rule"
+        kill $server_pid 2>/dev/null
+        return 1
+    fi
+    
+    # Restart tunnel service if running
+    local service_name="cloudflared-${tunnel_name}"
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        log_info "Restarting tunnel service..."
+        systemctl restart "$service_name"
+        sleep 3
+    fi
+    
+    # Create DNS route
+    echo
+    log_info "Creating temporary DNS route..."
+    if cloudflared tunnel route dns "$tunnel_name" "$test_hostname"; then
+        log_success "DNS route created: $test_hostname -> $tunnel_name"
+    else
+        log_warning "Failed to create DNS route (you may need to add it manually)"
+    fi
+    
+    # Show test instructions
+    echo
+    echo -e "${GREEN}=== Test Setup Complete ===${NC}"
+    echo -e "${CYAN}Test URL: https://$test_hostname${NC}"
+    echo
+    echo "Instructions:"
+    echo "1. Wait 1-2 minutes for DNS propagation"
+    echo "2. Open https://$test_hostname in your browser"
+    echo "3. You should see the 'Tunnel Test Success!' page"
+    echo "4. Press Enter when done testing to cleanup"
+    echo
+    
+    read -p "Press Enter to cleanup test environment..."
+    
+    # Cleanup
+    cleanup_test_environment "$server_pid" "$backup_file" "$config_file" "$test_hostname" "$service_name"
+}
+
+# Cleanup test environment
+cleanup_test_environment() {
+    local server_pid="$1"
+    local backup_file="$2"
+    local config_file="$3"
+    local test_hostname="$4"
+    local service_name="$5"
+    
+    log_info "Cleaning up test environment..."
+    
+    # Stop test server
+    if kill $server_pid 2>/dev/null; then
+        log_info "Test server stopped"
+    fi
+    
+    # Restore original config
+    if [[ -f "$backup_file" ]]; then
+        mv "$backup_file" "$config_file"
+        log_info "Original configuration restored"
+    fi
+    
+    # Remove DNS route
+    if cloudflared tunnel route dns delete "$test_hostname" 2>/dev/null; then
+        log_info "Test DNS route removed"
+    fi
+    
+    # Restart tunnel service
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        log_info "Restoring tunnel service..."
+        systemctl restart "$service_name"
+    fi
+    
+    log_success "Test environment cleaned up"
+}
+
+# Test existing service
+test_existing_service() {
+    echo
+    echo "This will test connectivity to your existing services"
+    echo
+    
+    # Get hostnames from config
+    local hostnames
+    mapfile -t hostnames < <(grep "hostname:" "$config_file" | awk '{print $2}' | sort)
+    
+    if [[ ${#hostnames[@]} -eq 0 ]]; then
+        log_warning "No hostnames found in configuration"
+        return 1
+    fi
+    
+    echo -e "${CYAN}Available hostnames to test:${NC}"
+    for i in "${!hostnames[@]}"; do
+        echo "$((i+1))) ${hostnames[i]}"
+    done
+    
+    while true; do
+        read -p "Select hostname to test (1-${#hostnames[@]}) or 0 to cancel: " choice
+        
+        if [[ "$choice" == "0" ]]; then
+            return 0
+        fi
+        
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#hostnames[@]} ]]; then
+            local test_hostname="${hostnames[$((choice-1))]}"
+            break
+        fi
+        
+        log_error "Please enter a number between 1 and ${#hostnames[@]}, or 0 to cancel"
+    done
+    
+    echo
+    log_info "Testing connectivity to: $test_hostname"
+    
+    # Test DNS resolution
+    echo -n "• DNS resolution: "
+    if nslookup "$test_hostname" &>/dev/null; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+        log_warning "DNS resolution failed"
+    fi
+    
+    # Test HTTP response
+    echo -n "• HTTP response: "
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" "https://$test_hostname" --max-time 10 2>/dev/null)
+    
+    if [[ "$http_code" =~ ^[2-3][0-9][0-9]$ ]]; then
+        echo -e "${GREEN}✓ ($http_code)${NC}"
+        log_success "Tunnel is working correctly!"
+    elif [[ "$http_code" == "000" ]]; then
+        echo -e "${RED}✗ (Connection failed)${NC}"
+        log_error "Cannot connect to service"
+    else
+        echo -e "${YELLOW}! ($http_code)${NC}"
+        log_warning "Service responded but may have issues"
+    fi
+    
+    # Test tunnel status
+    echo -n "• Tunnel status: "
+    if cloudflared tunnel info "$tunnel_name" 2>/dev/null | grep -q "connection"; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+        log_warning "Tunnel may not be running"
+    fi
+    
+    echo
+    read -p "Open $test_hostname in browser for manual testing? (y/n): " open_browser
+    if [[ $open_browser == "y" || $open_browser == "Y" ]]; then
+        if command -v xdg-open &> /dev/null; then
+            xdg-open "https://$test_hostname"
+        elif command -v open &> /dev/null; then
+            open "https://$test_hostname"
+        else
+            echo "Please manually open: https://$test_hostname"
+        fi
+    fi
+}
+
 # Main menu
 show_menu() {
     echo
@@ -1513,6 +1786,7 @@ show_menu() {
     echo
     echo " DNS & ROUTING:"
     echo "  15) Manage DNS Routes"
+    echo "  16) Test Tunnel Connectivity"
     echo
     echo " MAINTENANCE:"
     echo "  10) Delete Tunnel"
@@ -1557,6 +1831,7 @@ main() {
             13) backup_restore ;;
             14) update_cloudflared ;;
             15) manage_dns_routes ;;
+            16) test_tunnel_connectivity ;;
             h) show_help ;;
             q) 
                 log_info "Exiting Cloudflare Tunnel Manager"
@@ -1574,3 +1849,4 @@ main() {
 
 # Execute main function
 main "$@"
+

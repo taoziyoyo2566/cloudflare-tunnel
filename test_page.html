@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare Tunnel Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+            text-align: center;
+            animation: slideUp 0.6s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        h1 {
+            color: #2c5aa0;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .success-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            animation: bounce 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes bounce {
+            from { transform: translateY(0px); }
+            to { transform: translateY(-10px); }
+        }
+        
+        .success-message {
+            color: #28a745;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 30px;
+        }
+        
+        .details {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 5px solid #2c5aa0;
+        }
+        
+        .details h3 {
+            color: #2c5aa0;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .detail-value {
+            color: #28a745;
+            font-family: 'Courier New', monospace;
+            background: #e8f5e8;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .info-note {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-style: italic;
+            border: 1px solid #bbdefb;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        
+        .footer a {
+            color: #2c5aa0;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">🎉</div>
+        <h1>Tunnel Test Success!</h1>
+        <div class="success-message">
+            <span class="status-indicator"></span>
+            Port {{PORT}} is working via Cloudflare Tunnel
+        </div>
+        
+        <div class="details">
+            <h3>📊 Test Details</h3>
+            <div class="detail-item">
+                <span class="detail-label">Server Type:</span>
+                <span class="detail-value">Python HTTP Server</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Port:</span>
+                <span class="detail-value">{{PORT}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Test Time:</span>
+                <span class="detail-value">{{TIMESTAMP}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Connection Status:</span>
+                <span class="detail-value">✅ Successful</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Tunnel Status:</span>
+                <span class="detail-value">🟢 Active</span>
+            </div>
+        </div>
+        
+        <div class="info-note">
+            <strong>Success!</strong> Your Cloudflare Tunnel is configured correctly. 
+            You can now replace this test service with your actual application.
+        </div>
+        
+        <div class="footer">
+            <p>This is a temporary test service for Cloudflare Tunnel validation.</p>
+            <p>Managed by <a href="https://github.com/cloudflare/cloudflared" target="_blank">cloudflared</a></p>
+        </div>
+    </div>
+</body>
+</html>
