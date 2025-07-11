@@ -1732,8 +1732,9 @@ test_existing_service() {
     
     # Get hostnames from config
     local hostnames
-    mapfile -t hostnames < <(grep "hostname:" "$config_file" | awk '{print $2}' | sort)
-    
+    mapfile -t hostnames < <(grep "hostname:" "$config_file" | sed -E 's/^[[:space:]]*hostname:[[:space:]]*//' | grep -v '^$' | sort)
+
+
     if [[ ${#hostnames[@]} -eq 0 ]]; then
         log_warning "No hostnames found in configuration"
         return 1
