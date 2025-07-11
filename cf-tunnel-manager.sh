@@ -1164,7 +1164,7 @@ restart_tunnel() {
     fi
 
     log_info "Restarting service: $service_name"
-    
+
     if systemctl restart "$service_name"; then
         log_success "Tunnel service restarted: $service_name"
         sleep 2
