@@ -241,6 +241,25 @@ validate_service() {
     return 1
 }
 
+# 自动查找 tunnel 配置文件（支持 ~/.cloudflared 与 /etc/cloudflared）
+find_tunnel_config() {
+    local tunnel_name="$1"
+    # 优先级顺序
+    local try_paths=(
+        "$CONFIG_DIR/config_${tunnel_name}.yml"
+        "$CONFIG_DIR/config.yml"
+        "/etc/cloudflared/config_${tunnel_name}.yml"
+        "/etc/cloudflared/config.yml"
+    )
+    for file in "${try_paths[@]}"; do
+        if [[ -f "$file" ]]; then
+            echo "$file"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Create new tunnel
 create_tunnel() {
     echo
@@ -309,8 +328,13 @@ create_tunnel() {
 create_config_file() {
     local tunnel_name="$1"
     local tunnel_id="$2"
-    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
-    
+
+    local config_file
+        config_file=$(find_tunnel_config "$tunnel_name") || {
+        log_error "Config file not found for tunnel: $tunnel_name"
+        return 1
+    }
+
     # Validate inputs
     if [[ -z "$tunnel_name" || -z "$tunnel_id" ]]; then
         log_error "Missing tunnel name or ID"
@@ -408,8 +432,13 @@ show_tunnel_details() {
         echo -e "${CYAN}DNS Routes:${NC}"
         cloudflared tunnel route dns show "$tunnel_name" 2>/dev/null || echo "No DNS routes configured"
         
-        # Show config file if exists
-        local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
+        
+        local config_file
+            config_file=$(find_tunnel_config "$tunnel_name") || {
+            log_error "Config file not found for tunnel: $tunnel_name"
+            return 1
+        }
+
         if [[ -f "$config_file" ]]; then
             echo
             echo -e "${CYAN}Configuration File ($config_file):${NC}"
@@ -492,8 +521,11 @@ add_ingress_rule() {
     fi
     
     local tunnel_name="$selected_tunnel"
-    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
-    
+    local config_file
+        config_file=$(find_tunnel_config "$tunnel_name") || {
+        log_error "Config file not found for tunnel: $tunnel_name"
+        return 1
+    }   
     # Check if config file exists, create if needed
     if [[ ! -f "$config_file" ]]; then
         log_warning "Config file not found for tunnel: $tunnel_name"
@@ -741,8 +773,12 @@ test_ingress_rules() {
     fi
     
     local tunnel_name="$selected_tunnel"
-    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
-    
+        local config_file
+        config_file=$(find_tunnel_config "$tunnel_name") || {
+        log_error "Config file not found for tunnel: $tunnel_name"
+        return 1
+    }
+
     if [[ ! -f "$config_file" ]]; then
         log_error "Config file not found: $config_file"
         return 1
@@ -872,8 +908,12 @@ remove_ingress_rule() {
     fi
     
     local tunnel_name="$selected_tunnel"
-    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
-    
+    local config_file
+        config_file=$(find_tunnel_config "$tunnel_name") || {
+        log_error "Config file not found for tunnel: $tunnel_name"
+        return 1
+    }
+
     if [[ ! -f "$config_file" ]]; then
         log_error "Config file not found: $config_file"
         return 1
@@ -980,8 +1020,13 @@ start_tunnel() {
         log_error "Please enter a number between 1 and ${#configs[@]}, or 0 to cancel"
     done
     
-    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
-    
+    # local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
+    local config_file
+        config_file=$(find_tunnel_config "$tunnel_name") || {
+        log_error "Config file not found for tunnel: $tunnel_name"
+        return 1
+    }
+
     # Validate config
     echo
     log_info "Validating configuration..."
@@ -991,7 +1036,7 @@ start_tunnel() {
     fi
     
     # Check if service already running
-    local service_name="cloudflared-${tunnel_name}"
+    local service_name="cloudflared"
     if systemctl is-active --quiet "$service_name" 2>/dev/null; then
         log_warning "Service $service_name is already running"
         read -p "Restart the service? (y/n): " restart_choice
@@ -1512,8 +1557,11 @@ test_tunnel_connectivity() {
     fi
     
     local tunnel_name="$selected_tunnel"
-    local config_file="$CONFIG_DIR/config_${tunnel_name}.yml"
-    
+    local config_file
+        config_file=$(find_tunnel_config "$tunnel_name") || {
+        log_error "Config file not found for tunnel: $tunnel_name"
+        return 1
+    }
     if [[ ! -f "$config_file" ]]; then
         log_error "Config file not found: $config_file"
         return 1
