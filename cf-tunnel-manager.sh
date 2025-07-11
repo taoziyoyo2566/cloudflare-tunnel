@@ -1156,9 +1156,15 @@ restart_tunnel() {
         log_error "Please enter a number between 1 and ${#active_services[@]}, or 0 to cancel"
     done
     
-    local service_name="cloudflared-${tunnel_name}"
-    
+    local service_name
+    if [[ -z "$tunnel_name" || "$tunnel_name" == "cloudflared" ]]; then
+        service_name="cloudflared"
+    else
+        service_name="cloudflared-${tunnel_name}"
+    fi
+
     log_info "Restarting service: $service_name"
+    
     if systemctl restart "$service_name"; then
         log_success "Tunnel service restarted: $service_name"
         sleep 2
