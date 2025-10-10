@@ -1,0 +1,36 @@
+name: forbid-nbsp-and-bom
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Detect changed text files
+        id: files
+        run: |
+          base="${{ github.event.pull_request.base.sha || 'HEAD^' }}"
+          head="${{ github.sha }}"
+          git diff --name-only --diff-filter=ACM "$base" "$head" \
+            | grep -E '\.(sql|py|js|ts|tsx|java|go|sh|md|txt)$' || true
+      - name: Scan for NBSP (U+00A0) or UTF-8 BOM (U+FEFF)
+        run: |
+          set -e
+          base="${{ github.event.pull_request.base.sha || 'HEAD^' }}"
+          head="${{ github.sha }}"
+          bad=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            # 取新版本内容并搜索 0xC2 0xA0（NBSP）或 0xEF 0xBB 0xBF（BOM）
+            if git show "$head:$f" | grep -IU -n -P $'\xC2\xA0|\xEF\xBB\xBF' >/dev/null; then
+              echo "❌ $f 含 NBSP(U+00A0) 或 BOM(U+FEFF)"
+              bad=1
+            fi
+          done < <(git diff --name-only --diff-filter=ACM "$base" "$head" \
+                   | grep -E '\.(sql|py|js|ts|tsx|java|go|sh|md|txt)$' || true)
+          [ $bad -eq 0 ] || { echo "::error::检测到非法不可见字符"; exit 1; }
+
